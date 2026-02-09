@@ -1,0 +1,16 @@
+spring:
+  application:
+    name: currency-rate-provider
+
+rate:
+  base-rate: 90.0
+  daily-amplitude: 1.2
+  daily-phase-shift: 0.7
+  local-amplitude: 0.4
+  micro-amplitude: 0.03
+  seed: 1337
+  clamp-padding: 5.0
+
+logging:
+  level:
+    root: INFO

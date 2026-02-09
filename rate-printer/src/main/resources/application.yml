@@ -1,0 +1,14 @@
+spring:
+  application:
+    name: rate-printer
+server:
+  port: 8081
+
+provider:
+  url: http://localhost:8080/rpc
+  connect-timeout-ms: 1000
+  read-timeout-ms: 1000
+
+logging:
+  level:
+    root: INFO
