@@ -1,0 +1,13 @@
+services:
+  zookeeper:
+    image: zookeeper:3.9
+    container_name: marketcurrency-zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      ZOO_4LW_COMMANDS_WHITELIST: ruok,stat,mntr,conf,isro
+    healthcheck:
+      test: ["CMD", "sh", "-c", "echo ruok | nc 127.0.0.1 2181 | grep imok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10

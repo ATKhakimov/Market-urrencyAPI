@@ -1,6 +1,18 @@
 spring:
   application:
     name: currency-rate-provider
+  cloud:
+    zookeeper:
+      connect-string: ${ZOOKEEPER_CONNECT_STRING:localhost:2181}
+      discovery:
+        enabled: true
+        register: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
 
 rate:
   base-rate: 90.0

@@ -2,6 +2,11 @@
 
 Проект состоит из двух независимых Spring Boot сервисов, которые общаются по JSON-RPC 2.0 поверх HTTP.
 
+Service registry реализован через ZooKeeper:
+- `currency-rate-provider` автоматически регистрирует свои instance-ы при старте;
+- `rate-printer` получает актуальный список instance-ов через discovery;
+- выбор instance-а выполняется client-side балансировкой (round-robin).
+
 ## Сервисы
 
 ### currency-rate-provider
@@ -41,7 +46,7 @@ JSON-RPC ответ:
 
 Клиент, который каждые 5 секунд вызывает provider и печатает курс в лог.
 
-Конфигурируется через [rate-printer/src/main/resources/application.yml](rate-printer/src/main/resources/application.yml) (URL и таймауты).
+Конфигурируется через [rate-printer/src/main/resources/application.yml](rate-printer/src/main/resources/application.yml) (service-id, RPC path и таймауты).
 
 Пример лога:
 
@@ -51,19 +56,53 @@ JSON-RPC ответ:
 
 ## Как запустить
 
-В двух отдельных терминалах:
+1. Поднять ZooKeeper:
+
+```bash
+docker compose up -d zookeeper
+```
+
+2. Запустить несколько instance provider.
+
+Первый instance:
 
 ```bash
 cd currency-rate-provider
 ./gradlew bootRun
 ```
 
+Второй instance:
+
+```bash
+cd currency-rate-provider
+./gradlew bootRun --args='--server.port=8082'
+```
+
+3. Запустить consumer:
+
 ```bash
 cd rate-printer
 ./gradlew bootRun
 ```
 
-По умолчанию provider слушает http://localhost:8080/rpc.
+По умолчанию provider слушает `http://localhost:8080/rpc`.
+
+```bash
+ZOOKEEPER_CONNECT_STRING=<host:port>
+```
+
+## Наблюдаемость
+
+Логируются ключевые события:
+- регистрация provider instance в ZooKeeper;
+- обновление списка доступных provider instance у consumer;
+- выбор instance балансировщиком для каждого вызова;
+- ошибки вызова provider.
+
+Базовые метрики доступны через Actuator (`/actuator/metrics`):
+- `provider.instances.available` — число доступных provider instance;
+- `provider.calls.total{result=success|failure}` — успешность вызовов;
+- `provider.call.latency` — latency вызовов provider.
 
 ## Тесты
 
