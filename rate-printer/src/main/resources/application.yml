@@ -1,13 +1,28 @@
 spring:
   application:
     name: rate-printer
+  cloud:
+    zookeeper:
+      connect-string: ${ZOOKEEPER_CONNECT_STRING:localhost:2181}
+      discovery:
+        enabled: true
+        register: false
+
 server:
   port: 8081
 
 provider:
-  url: http://localhost:8080/rpc
+  service-id: currency-rate-provider
+  rpc-path: /rpc
   connect-timeout-ms: 1000
   read-timeout-ms: 1000
+  discovery-refresh-ms: 3000
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
 
 logging:
   level:
