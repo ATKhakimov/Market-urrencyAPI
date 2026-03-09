@@ -2,6 +2,7 @@ plugins {
 	id 'java'
 	id 'org.springframework.boot' version '3.5.0'
 	id 'io.spring.dependency-management' version '1.1.7'
+	id 'au.com.dius.pact' version '4.4.5'
 }
 
 group = 'com.marketcurrency.api'
@@ -45,9 +46,34 @@ dependencies {
 	annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
 	annotationProcessor 'org.projectlombok:lombok'
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
+	testImplementation 'au.com.dius.pact.consumer:junit5:4.4.5'
+	testImplementation 'io.micrometer:micrometer-core'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
 tasks.named('test') {
 	useJUnitPlatform()
+	systemProperty 'pact.rootDir', "$buildDir/pacts"
+}
+
+tasks.register('publishPactsToBroker') {
+	group = 'verification'
+	description = 'Publishes generated Pact files from build/pacts to Pact Broker'
+	dependsOn tasks.test
+	dependsOn tasks.pactPublish
+
+	doFirst {
+		if (!System.getenv('PACT_BROKER_BASE_URL')) {
+			logger.lifecycle('PACT_BROKER_BASE_URL is not set, using default http://localhost:9292')
+		}
+	}
+}
+
+pact {
+	publish {
+		pactBrokerUrl = System.getenv('PACT_BROKER_BASE_URL') ?: 'http://localhost:9292'
+		pactDirectory = "$buildDir/pacts"
+		consumerVersion = System.getenv('PACT_CONSUMER_VERSION') ?: project.version.toString()
+		tags = [System.getenv('PACT_CONSUMER_TAG') ?: 'dev']
+	}
 }

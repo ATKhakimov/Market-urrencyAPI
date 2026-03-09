@@ -59,7 +59,7 @@ JSON-RPC ответ:
 1. Поднять ZooKeeper:
 
 ```bash
-docker compose up -d zookeeper
+docker compose up -d zookeeper pact-broker-db pact-broker
 ```
 
 2. Запустить несколько instance provider.
@@ -117,3 +117,58 @@ cd currency-rate-provider
 cd rate-printer
 ./gradlew test
 ```
+
+## Pact-контракты
+
+В проект добавлен consumer-driven contract testing через Pact:
+- `rate-printer` формирует контракт клиента для JSON-RPC вызова `POST /rpc`;
+- `currency-rate-provider` при `test/build` забирает контракты из Pact Broker и верифицирует API по ним.
+
+### Локальный Pact Broker
+
+Broker доступен по адресу:
+
+```bash
+http://localhost:9292
+```
+
+### Генерация и публикация контракта (consumer)
+
+```bash
+cd rate-printer
+./gradlew test publishPactsToBroker
+```
+
+Опционально можно передать переменные:
+
+```bash
+PACT_BROKER_BASE_URL=http://localhost:9292
+PACT_CONSUMER_VERSION=1.0.0
+PACT_CONSUMER_TAG=dev
+```
+
+### Верификация контракта provider-ом из broker
+
+```bash
+cd currency-rate-provider
+./gradlew build
+```
+
+При необходимости адрес broker задаётся переменной:
+
+```bash
+PACT_BROKER_BASE_URL=http://localhost:9292
+```
+
+### Один запуск всего потока (Windows/PowerShell)
+
+В корне проекта доступен скрипт:
+
+```powershell
+./run-pact-e2e.ps1
+```
+
+Скрипт выполняет шаги подряд:
+- поднимает `zookeeper`, `pact-broker-db`, `pact-broker`;
+- запускает `rate-printer` (`test + publishPactsToBroker`);
+- запускает `currency-rate-provider` (`build`, включая Pact verification).

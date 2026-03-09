@@ -1,4 +1,40 @@
 services:
+  pact-broker-db:
+    image: postgres:16
+    container_name: marketcurrency-pact-broker-db
+    environment:
+      POSTGRES_USER: pact
+      POSTGRES_PASSWORD: pact
+      POSTGRES_DB: pact
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pact -d pact"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  pact-broker:
+    image: pactfoundation/pact-broker:latest
+    container_name: marketcurrency-pact-broker
+    depends_on:
+      pact-broker-db:
+        condition: service_healthy
+    environment:
+      PACT_BROKER_DATABASE_ADAPTER: postgres
+      PACT_BROKER_DATABASE_HOST: pact-broker-db
+      PACT_BROKER_DATABASE_NAME: pact
+      PACT_BROKER_DATABASE_USERNAME: pact
+      PACT_BROKER_DATABASE_PASSWORD: pact
+      PACT_BROKER_LOG_LEVEL: INFO
+    ports:
+      - "9292:9292"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:9292/diagnostic/status/heartbeat"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   zookeeper:
     image: zookeeper:3.9
     container_name: marketcurrency-zookeeper
