@@ -78,3 +78,11 @@ cd currency-rate-provider
 cd rate-printer
 ./gradlew test
 ```
+
+Единый запуск тестов обоих сервисов под Java 25:
+
+```powershell
+./run-tests-java25.ps1
+```
+
+```
