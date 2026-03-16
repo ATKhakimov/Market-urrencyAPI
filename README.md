@@ -172,3 +172,9 @@ PACT_BROKER_BASE_URL=http://localhost:9292
 - поднимает `zookeeper`, `pact-broker-db`, `pact-broker`;
 - запускает `rate-printer` (`test + publishPactsToBroker`);
 - запускает `currency-rate-provider` (`build`, включая Pact verification).
+
+Единый запуск тестов обоих сервисов под Java 25:
+
+```powershell
+./run-tests-java25.ps1
+```
