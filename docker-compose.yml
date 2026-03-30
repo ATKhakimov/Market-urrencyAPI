@@ -40,10 +40,43 @@ services:
     container_name: marketcurrency-zookeeper
     ports:
       - "2181:2181"
+      - "7000:7000"
     environment:
       ZOO_4LW_COMMANDS_WHITELIST: ruok,stat,mntr,conf,isro
+      ZOO_CFG_EXTRA: |
+        metricsProvider.className=org.apache.zookeeper.metrics.prometheus.PrometheusMetricsProvider
+        metricsProvider.httpHost=0.0.0.0
+        metricsProvider.httpPort=7000
+        metricsProvider.exportJvmInfo=true
     healthcheck:
       test: ["CMD", "sh", "-c", "echo ruok | nc 127.0.0.1 2181 | grep imok"]
       interval: 10s
       timeout: 5s
       retries: 10
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: marketcurrency-prometheus
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+    ports:
+      - "9090:9090"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: marketcurrency-grafana
+    depends_on:
+      - prometheus
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "3000:3000"

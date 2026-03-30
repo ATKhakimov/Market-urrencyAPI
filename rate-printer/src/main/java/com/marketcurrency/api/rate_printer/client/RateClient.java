@@ -9,9 +9,13 @@ import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.client.ServiceInstance;
 import org.springframework.cloud.client.discovery.DiscoveryClient;
 import org.springframework.cloud.client.loadbalancer.LoadBalancerClient;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -41,6 +45,7 @@ public class RateClient {
 	private final DiscoveryClient discoveryClient;
 	private final LoadBalancerClient loadBalancerClient;
 	private final RestTemplate restTemplate;
+	private final String clientId;
 	private final AtomicLong idSequence = new AtomicLong(1);
 	private final AtomicInteger availableInstancesGauge;
 	private final Counter successCounter;
@@ -52,11 +57,13 @@ public class RateClient {
 			ObjectMapper objectMapper,
 			DiscoveryClient discoveryClient,
 			LoadBalancerClient loadBalancerClient,
-			MeterRegistry meterRegistry) {
+			MeterRegistry meterRegistry,
+			@Value("${spring.application.name}") String clientId) {
 		this.properties = properties;
 		this.objectMapper = objectMapper;
 		this.discoveryClient = discoveryClient;
 		this.loadBalancerClient = loadBalancerClient;
+		this.clientId = clientId;
 		SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
 		factory.setConnectTimeout(properties.getConnectTimeoutMs());
 		factory.setReadTimeout(properties.getReadTimeoutMs());
@@ -112,7 +119,13 @@ public class RateClient {
 				selectedInstance.getPort());
 
 		try {
-			ResponseEntity<String> response = restTemplate.postForEntity(targetUrl, request, String.class);
+			String requestJson = objectMapper.writeValueAsString(request);
+			HttpHeaders headers = new HttpHeaders();
+			headers.setContentType(MediaType.APPLICATION_JSON);
+			headers.set("X-Client-Id", clientId);
+			logger.info("client -> requestId={} target={} body={}", id, targetUrl, requestJson);
+			ResponseEntity<String> response = restTemplate.postForEntity(targetUrl, new HttpEntity<>(requestJson, headers), String.class);
+			logger.info("client <- requestId={} status={} body={}", id, response.getStatusCode().value(), response.getBody());
 			JsonRpcResponse rpcResponse = objectMapper.readValue(response.getBody(), JsonRpcResponse.class);
 			if (rpcResponse.getError() != null) {
 				failureCounter.increment();
