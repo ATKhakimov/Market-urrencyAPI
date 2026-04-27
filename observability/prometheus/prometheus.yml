@@ -23,6 +23,29 @@ scrape_configs:
           application: currency-rate-provider
           instance_role: service2
 
+  - job_name: 'rate-printer-prod'
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['rate-printer:8081']
+        labels:
+          application: rate-printer
+          instance_role: client
+          env: prod
+
+  - job_name: 'currency-rate-provider-prod'
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['provider-1:8080']
+        labels:
+          application: currency-rate-provider
+          instance_role: service1
+          env: prod
+      - targets: ['provider-2:8080']
+        labels:
+          application: currency-rate-provider
+          instance_role: service2
+          env: prod
+
   - job_name: 'zookeeper'
     static_configs:
       - targets: ['zookeeper:7000']
