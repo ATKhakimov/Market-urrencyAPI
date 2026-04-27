@@ -1,6 +1,15 @@
 spring:
   application:
     name: rate-printer
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+  task:
+    scheduling:
+      shutdown:
+        await-termination: true
+        await-termination-period: 30s
   cloud:
     zookeeper:
       connect-string: ${ZOOKEEPER_CONNECT_STRING:localhost:2181}
@@ -10,6 +19,7 @@ spring:
 
 server:
   port: 8081
+  shutdown: graceful
 
 provider:
   service-id: currency-rate-provider
