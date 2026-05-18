@@ -14,8 +14,25 @@ spring:
 
 server:
   shutdown: graceful
+  http2:
+    enabled: true
+  tomcat:
+    accept-count: 1000
+    max-connections: 10000
+    connection-timeout: 5s
+    keep-alive-timeout: 60s
+    max-keep-alive-requests: 1000
+    threads:
+      max: 200
+      min-spare: 20
 
 management:
+  tracing:
+    sampling:
+      probability: 1.0
+  zipkin:
+    tracing:
+      endpoint: ${ZIPKIN_ENDPOINT:http://localhost:9411/api/v2/spans}
   endpoints:
     web:
       exposure:

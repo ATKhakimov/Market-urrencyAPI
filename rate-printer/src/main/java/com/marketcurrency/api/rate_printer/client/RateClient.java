@@ -10,6 +10,7 @@ import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.cloud.client.ServiceInstance;
 import org.springframework.cloud.client.discovery.DiscoveryClient;
 import org.springframework.cloud.client.loadbalancer.LoadBalancerClient;
@@ -17,7 +18,15 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
+import org.apache.hc.client5.http.config.ConnectionConfig;
+import org.apache.hc.client5.http.config.RequestConfig;
+import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
+import org.apache.hc.client5.http.impl.classic.HttpClients;
+import org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManagerBuilder;
+import org.apache.hc.client5.http.io.HttpClientConnectionManager;
+import org.apache.hc.core5.util.TimeValue;
+import org.apache.hc.core5.util.Timeout;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -32,6 +41,7 @@ import com.marketcurrency.api.rate_printer.dto.GetRateResult;
 import com.marketcurrency.api.rate_printer.dto.JsonRpcRequest;
 import com.marketcurrency.api.rate_printer.dto.JsonRpcResponse;
 
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
@@ -58,16 +68,32 @@ public class RateClient {
 			DiscoveryClient discoveryClient,
 			LoadBalancerClient loadBalancerClient,
 			MeterRegistry meterRegistry,
+			RestTemplateBuilder restTemplateBuilder,
 			@Value("${spring.application.name}") String clientId) {
 		this.properties = properties;
 		this.objectMapper = objectMapper;
 		this.discoveryClient = discoveryClient;
 		this.loadBalancerClient = loadBalancerClient;
 		this.clientId = clientId;
-		SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-		factory.setConnectTimeout(properties.getConnectTimeoutMs());
-		factory.setReadTimeout(properties.getReadTimeoutMs());
-		this.restTemplate = new RestTemplate(factory);
+		HttpClientConnectionManager connectionManager = PoolingHttpClientConnectionManagerBuilder.create()
+				.setMaxConnTotal(50)
+				.setMaxConnPerRoute(20)
+				.setDefaultConnectionConfig(ConnectionConfig.custom()
+						.setConnectTimeout(Timeout.ofMilliseconds(properties.getConnectTimeoutMs()))
+						.setSocketTimeout(Timeout.ofMilliseconds(properties.getReadTimeoutMs()))
+						.build())
+				.build();
+		CloseableHttpClient httpClient = HttpClients.custom()
+				.setConnectionManager(connectionManager)
+				.evictIdleConnections(TimeValue.ofSeconds(30))
+				.setDefaultRequestConfig(RequestConfig.custom()
+						.setResponseTimeout(Timeout.ofMilliseconds(properties.getReadTimeoutMs()))
+						.setConnectionRequestTimeout(Timeout.ofMilliseconds(properties.getConnectTimeoutMs()))
+						.build())
+				.build();
+		this.restTemplate = restTemplateBuilder
+				.requestFactory(() -> new HttpComponentsClientHttpRequestFactory(httpClient))
+				.build();
 		this.availableInstancesGauge = meterRegistry.gauge("provider.instances.available", new AtomicInteger(0));
 		this.successCounter = Counter.builder("provider.calls.total")
 				.tag("serviceId", properties.getServiceId())
@@ -98,6 +124,7 @@ public class RateClient {
 		}
 	}
 
+	@CircuitBreaker(name = "provider", fallbackMethod = "getRateFallback")
 	public GetRateResult getRate(String pair) {
 		long startedAtNanos = System.nanoTime();
 		String id = String.valueOf(idSequence.getAndIncrement());
@@ -151,6 +178,12 @@ public class RateClient {
 		} finally {
 			callTimer.record(Duration.ofNanos(System.nanoTime() - startedAtNanos));
 		}
+	}
+
+	@SuppressWarnings("unused")
+	private GetRateResult getRateFallback(String pair, Throwable ex) {
+		logger.warn("Circuit breaker fallback for pair={}, reason={}", pair, ex.getMessage());
+		throw new RateClientException("provider unavailable (circuit open or call failed): " + ex.getMessage(), ex);
 	}
 
 	private String instanceKey(ServiceInstance serviceInstance) {
